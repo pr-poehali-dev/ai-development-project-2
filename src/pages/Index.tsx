@@ -34,7 +34,37 @@ export default function Index() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [settingsSection, setSettingsSection] = useState<"main" | "theme" | "support">("main");
+  const [ageModal, setAgeModal] = useState(false);
+  const [ageAnswer, setAgeAnswer] = useState("");
+  const [ageError, setAgeError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const QUIZ = {
+    question: "Сколько лет исполняется человеку, если он родился в 2006 году, а сейчас 2024?",
+    hint: "Подсказка: 2024 − 2006 = ?",
+    answer: "18",
+  };
+
+  const handleKidsToggle = () => {
+    if (kidsMode) {
+      setAgeAnswer("");
+      setAgeError(false);
+      setAgeModal(true);
+    } else {
+      setKidsMode(true);
+    }
+  };
+
+  const handleAgeSubmit = () => {
+    if (ageAnswer.trim() === QUIZ.answer) {
+      setAgeModal(false);
+      setKidsMode(false);
+      setAgeAnswer("");
+      setAgeError(false);
+    } else {
+      setAgeError(true);
+    }
+  };
 
   const effectiveTheme = kidsMode ? "kids" : theme;
 
@@ -360,7 +390,7 @@ export default function Index() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setKidsMode((v) => !v)}
+                    onClick={handleKidsToggle}
                     className="relative w-12 h-6 rounded-full transition-all duration-300"
                     style={{ background: kidsMode ? "#f5a623" : "var(--kruel-border)" }}
                   >
@@ -508,6 +538,83 @@ export default function Index() {
           </div>
         )}
       </main>
+
+      {/* Age verification modal */}
+      {ageModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fade-in"
+          style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-6 animate-scale-in"
+            style={{ background: "var(--kruel-surface)", border: "1px solid var(--kruel-border)" }}
+          >
+            {/* Icon */}
+            <div className="flex justify-center mb-4">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                style={{ background: "rgba(224,32,32,0.12)", border: "1px solid var(--kruel-red)" }}
+              >
+                <span className="text-2xl">🔞</span>
+              </div>
+            </div>
+
+            <h3 className="font-orbitron font-bold text-base text-center mb-1" style={{ color: "var(--kruel-text)" }}>
+              Проверка возраста
+            </h3>
+            <p className="text-xs text-center mb-5" style={{ color: "var(--kruel-text-dim)" }}>
+              Детский режим защищает от взрослого контента. Чтобы отключить его — ответь на вопрос.
+            </p>
+
+            <div
+              className="p-4 rounded-xl mb-4"
+              style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)" }}
+            >
+              <p className="text-sm font-medium mb-1" style={{ color: "var(--kruel-text)" }}>
+                {QUIZ.question}
+              </p>
+              <p className="text-xs" style={{ color: "var(--kruel-text-dim)" }}>{QUIZ.hint}</p>
+            </div>
+
+            <input
+              type="number"
+              value={ageAnswer}
+              onChange={(e) => { setAgeAnswer(e.target.value); setAgeError(false); }}
+              onKeyDown={(e) => e.key === "Enter" && handleAgeSubmit()}
+              placeholder="Введи ответ..."
+              className="w-full px-4 py-3 rounded-xl text-sm outline-none mb-2"
+              style={{
+                background: "var(--kruel-surface2)",
+                border: ageError ? "1px solid var(--kruel-red)" : "1px solid var(--kruel-border)",
+                color: "var(--kruel-text)",
+              }}
+            />
+
+            {ageError && (
+              <p className="text-xs mb-3 text-center animate-fade-in" style={{ color: "var(--kruel-red)" }}>
+                Неверный ответ. Попробуй ещё раз!
+              </p>
+            )}
+
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => setAgeModal(false)}
+                className="flex-1 py-3 rounded-xl text-sm font-medium transition-all hover:opacity-80"
+                style={{ background: "var(--kruel-surface2)", color: "var(--kruel-text-dim)", border: "1px solid var(--kruel-border)" }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleAgeSubmit}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+                style={{ background: "var(--kruel-red)", color: "#fff" }}
+              >
+                Подтвердить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
