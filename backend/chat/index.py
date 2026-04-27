@@ -1,10 +1,10 @@
 import json
 import os
-import requests
+import http.client
 
 
 def handler(event, context) -> dict:
-    """Отправляет сообщение в OpenRouter и возвращает ответ ИИ для чата Kruel AI."""
+    """Отправляет сообщение в OpenRouter (Claude) и возвращает ответ ИИ."""
 
     if not isinstance(event, dict):
         try:
@@ -43,32 +43,39 @@ def handler(event, context) -> dict:
 
     api_messages = [{"role": "system", "content": system_prompt}] + messages
 
-    api_key = os.environ.get('OPENROUTER_API_KEY', '')
+    payload = json.dumps({
+        "model": "anthropic/claude-3.5-haiku",
+        "messages": api_messages,
+        "max_tokens": 1024,
+        "temperature": 0.7,
+    }).encode("utf-8")
 
-    resp = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
+    api_key = os.environ.get('OPENROUTER_API_KEY', '').strip()
+    auth_header = ("Bearer " + api_key).encode("latin-1", errors="replace").decode("latin-1")
+
+    conn = http.client.HTTPSConnection("openrouter.ai", timeout=25)
+    conn.request(
+        "POST",
+        "/api/v1/chat/completions",
+        body=payload,
         headers={
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": auth_header,
             "Content-Type": "application/json",
+            "Content-Length": str(len(payload)),
         },
-        data=json.dumps({
-            "model": "mistralai/mistral-7b-instruct:free",
-            "messages": api_messages,
-            "max_tokens": 1024,
-            "temperature": 0.7,
-        }).encode("utf-8"),
-        timeout=25,
     )
+    resp = conn.getresponse()
+    raw = resp.read().decode("utf-8")
+    conn.close()
 
-    result = resp.json()
-    print("OpenRouter response:", result)
+    result = json.loads(raw)
 
     if "choices" not in result:
-        error_msg = result.get("error", {}).get("message", str(result))
+        error_msg = result.get("error", {}).get("message", raw[:200])
         return {
             'statusCode': 200,
             'headers': {'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({"reply": f"Ошибка API: {error_msg}"})
+            'body': json.dumps({"reply": "Ошибка: " + error_msg})
         }
 
     reply = result["choices"][0]["message"]["content"].strip()
