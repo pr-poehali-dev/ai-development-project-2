@@ -11,6 +11,11 @@ interface Message {
   time: string;
 }
 
+interface User {
+  email: string;
+  nick: string;
+}
+
 const WELCOME_MSG: Message = {
   id: 0,
   role: "ai",
@@ -26,24 +31,49 @@ const DEMO_REPLIES = [
   "Хороший вопрос. Давай разберём это вместе.",
 ];
 
+const QUIZ = {
+  question: "Сколько лет исполняется человеку, если он родился в 2006 году, а сейчас 2024?",
+  hint: "Подсказка: 2024 − 2006 = ?",
+  answer: "18",
+};
+
 export default function Index() {
   const [theme, setTheme] = useState<Theme>("dark");
-  const [kidsMode, setKidsMode] = useState(false);
+  const [kidsMode, setKidsMode] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("chat");
   const [messages, setMessages] = useState<Message[]>([WELCOME_MSG]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [settingsSection, setSettingsSection] = useState<"main" | "theme" | "support">("main");
+
+  // Age modal
   const [ageModal, setAgeModal] = useState(false);
   const [ageAnswer, setAgeAnswer] = useState("");
   const [ageError, setAgeError] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const QUIZ = {
-    question: "Сколько лет исполняется человеку, если он родился в 2006 году, а сейчас 2024?",
-    hint: "Подсказка: 2024 − 2006 = ?",
-    answer: "18",
-  };
+  // Auth modal
+  const [authModal, setAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("register");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authNick, setAuthNick] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [user, setUser] = useState<User | null>(null);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const effectiveTheme = kidsMode ? "kids" : theme;
+
+  useEffect(() => {
+    const body = document.body;
+    body.classList.remove("theme-light", "theme-kids");
+    if (effectiveTheme === "light") body.classList.add("theme-light");
+    if (effectiveTheme === "kids") body.classList.add("theme-kids");
+    return () => body.classList.remove("theme-light", "theme-kids");
+  }, [effectiveTheme]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isTyping]);
 
   const handleKidsToggle = () => {
     if (kidsMode) {
@@ -66,21 +96,42 @@ export default function Index() {
     }
   };
 
-  const effectiveTheme = kidsMode ? "kids" : theme;
+  const openAuth = (mode: "login" | "register") => {
+    setAuthMode(mode);
+    setAuthEmail("");
+    setAuthNick("");
+    setAuthPassword("");
+    setAuthError("");
+    setAuthModal(true);
+  };
 
-  useEffect(() => {
-    const body = document.body;
-    body.classList.remove("theme-light", "theme-kids");
-    if (effectiveTheme === "light") body.classList.add("theme-light");
-    if (effectiveTheme === "kids") body.classList.add("theme-kids");
-    return () => {
-      body.classList.remove("theme-light", "theme-kids");
-    };
-  }, [effectiveTheme]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  const handleAuthSubmit = () => {
+    setAuthError("");
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setAuthError("Заполни все поля");
+      return;
+    }
+    if (!authEmail.includes("@")) {
+      setAuthError("Введи корректный Gmail");
+      return;
+    }
+    if (authMode === "register") {
+      if (!authNick.trim()) {
+        setAuthError("Придумай ник");
+        return;
+      }
+      if (authNick.trim().length < 3) {
+        setAuthError("Ник должен быть минимум 3 символа");
+        return;
+      }
+      if (authPassword.length < 6) {
+        setAuthError("Пароль минимум 6 символов");
+        return;
+      }
+    }
+    setUser({ email: authEmail.trim(), nick: authNick.trim() || authEmail.split("@")[0] });
+    setAuthModal(false);
+  };
 
   const sendMessage = () => {
     if (!input.trim()) return;
@@ -124,7 +175,7 @@ export default function Index() {
     >
       {/* Header */}
       <header
-        className="flex items-center justify-between px-6 py-4 border-b"
+        className="flex items-center justify-between px-4 py-3 border-b"
         style={{ background: "var(--kruel-surface)", borderColor: "var(--kruel-border)" }}
       >
         <div className="flex items-center gap-3">
@@ -138,17 +189,53 @@ export default function Index() {
             KRUEL <span style={{ color: "var(--kruel-red)" }}>AI</span>
           </h1>
         </div>
+
         <div className="flex items-center gap-2">
           {kidsMode && (
             <span
-              className="text-xs px-3 py-1 rounded-full font-medium"
+              className="text-xs px-2.5 py-1 rounded-full font-medium hidden sm:inline"
               style={{ background: "#f5a62325", color: "#f5a623", border: "1px solid #f5a62340" }}
             >
               🧒 Детский режим
             </span>
           )}
+
+          {user ? (
+            /* Аватар пользователя */
+            <div className="flex items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold cursor-pointer"
+                style={{ background: "var(--kruel-red)", color: "#fff" }}
+                title={user.email}
+              >
+                {user.nick[0].toUpperCase()}
+              </div>
+              <span className="text-sm font-medium hidden sm:inline" style={{ color: "var(--kruel-text)" }}>
+                {user.nick}
+              </span>
+              <button
+                onClick={() => setUser(null)}
+                title="Выйти"
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:opacity-70"
+                style={{ color: "var(--kruel-text-dim)" }}
+              >
+                <Icon name="LogOut" size={15} />
+              </button>
+            </div>
+          ) : (
+            /* Кнопка Войти */
+            <button
+              onClick={() => openAuth("register")}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+              style={{ background: "var(--kruel-red)", color: "#fff" }}
+            >
+              <Icon name="User" size={14} />
+              Войти
+            </button>
+          )}
+
           <div
-            className="w-2 h-2 rounded-full"
+            className="w-2 h-2 rounded-full ml-1"
             style={{ background: "#22c55e", boxShadow: "0 0 6px #22c55e" }}
           />
         </div>
@@ -208,29 +295,17 @@ export default function Index() {
                       className="px-4 py-3 text-sm leading-relaxed"
                       style={
                         msg.role === "user"
-                          ? {
-                              background: "var(--kruel-red)",
-                              color: "#fff",
-                              borderRadius: "18px 18px 4px 18px",
-                            }
-                          : {
-                              background: "var(--kruel-surface2)",
-                              color: "var(--kruel-text)",
-                              border: "1px solid var(--kruel-border)",
-                              borderRadius: "18px 18px 18px 4px",
-                            }
+                          ? { background: "var(--kruel-red)", color: "#fff", borderRadius: "18px 18px 4px 18px" }
+                          : { background: "var(--kruel-surface2)", color: "var(--kruel-text)", border: "1px solid var(--kruel-border)", borderRadius: "18px 18px 18px 4px" }
                       }
                     >
                       {msg.text}
                     </div>
                     <div
                       className="text-xs mt-1 px-1"
-                      style={{
-                        color: "var(--kruel-text-dim)",
-                        textAlign: msg.role === "user" ? "right" : "left",
-                      }}
+                      style={{ color: "var(--kruel-text-dim)", textAlign: msg.role === "user" ? "right" : "left" }}
                     >
-                      {msg.time}
+                      {msg.role === "user" && user ? `${user.nick} · ` : ""}{msg.time}
                     </div>
                   </div>
                 </div>
@@ -246,11 +321,7 @@ export default function Index() {
                   </div>
                   <div
                     className="px-4 py-3 flex items-center gap-1.5"
-                    style={{
-                      background: "var(--kruel-surface2)",
-                      border: "1px solid var(--kruel-border)",
-                      borderRadius: "18px 18px 18px 4px",
-                    }}
+                    style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)", borderRadius: "18px 18px 18px 4px" }}
                   >
                     {[0, 1, 2].map((i) => (
                       <span
@@ -265,7 +336,6 @@ export default function Index() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input area */}
             <div
               className="px-4 pb-6 pt-3 border-t"
               style={{ background: "var(--kruel-surface)", borderColor: "var(--kruel-border)" }}
@@ -279,10 +349,7 @@ export default function Index() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
                   }}
                   placeholder={kidsMode ? "Спроси меня что-нибудь! 😊" : "Напиши сообщение..."}
                   className="flex-1 resize-none bg-transparent outline-none text-sm leading-relaxed"
@@ -292,10 +359,7 @@ export default function Index() {
                   onClick={sendMessage}
                   disabled={!input.trim()}
                   className="w-9 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0"
-                  style={{
-                    background: input.trim() ? "var(--kruel-red)" : "var(--kruel-border)",
-                    color: "#fff",
-                  }}
+                  style={{ background: input.trim() ? "var(--kruel-red)" : "var(--kruel-border)", color: "#fff" }}
                 >
                   <Icon name="Send" size={16} />
                 </button>
@@ -316,9 +380,7 @@ export default function Index() {
             >
               <Icon name="Search" size={28} style={{ color: "var(--kruel-red)" }} />
             </div>
-            <h2 className="font-orbitron font-bold text-lg mb-2" style={{ color: "var(--kruel-text)" }}>
-              Поиск
-            </h2>
+            <h2 className="font-orbitron font-bold text-lg mb-2" style={{ color: "var(--kruel-text)" }}>Поиск</h2>
             <p className="text-sm text-center" style={{ color: "var(--kruel-text-dim)", maxWidth: "280px" }}>
               Умный поиск по знаниям Kruel AI. Скоро здесь появится поиск.
             </p>
@@ -339,11 +401,7 @@ export default function Index() {
               <div
                 key={i}
                 className="flex items-center justify-between p-4 rounded-xl mb-2 cursor-pointer transition-all hover:opacity-80 animate-fade-in"
-                style={{
-                  background: "var(--kruel-surface2)",
-                  border: "1px solid var(--kruel-border)",
-                  animationDelay: `${i * 0.08}s`,
-                }}
+                style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)", animationDelay: `${i * 0.08}s` }}
               >
                 <div className="flex items-center gap-3">
                   <div
@@ -357,10 +415,7 @@ export default function Index() {
                     <p className="text-xs" style={{ color: "var(--kruel-text-dim)" }}>{item.date}</p>
                   </div>
                 </div>
-                <span
-                  className="text-xs px-2.5 py-1 rounded-full"
-                  style={{ background: "var(--kruel-border)", color: "var(--kruel-text-dim)" }}
-                >
+                <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "var(--kruel-border)", color: "var(--kruel-text-dim)" }}>
                   {item.msgs} сообщ.
                 </span>
               </div>
@@ -376,6 +431,49 @@ export default function Index() {
                 <h2 className="font-orbitron font-semibold text-base mb-6 px-1" style={{ color: "var(--kruel-text)" }}>
                   Настройки
                 </h2>
+
+                {/* Account block */}
+                {user ? (
+                  <div
+                    className="flex items-center justify-between p-4 rounded-xl mb-3"
+                    style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)" }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-base font-bold"
+                        style={{ background: "var(--kruel-red)", color: "#fff" }}
+                      >
+                        {user.nick[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: "var(--kruel-text)" }}>{user.nick}</p>
+                        <p className="text-xs" style={{ color: "var(--kruel-text-dim)" }}>{user.email}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setUser(null)}
+                      className="text-xs px-3 py-1.5 rounded-lg transition-all hover:opacity-80"
+                      style={{ background: "var(--kruel-border)", color: "var(--kruel-text-dim)" }}
+                    >
+                      Выйти
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => openAuth("register")}
+                    className="w-full flex items-center justify-between p-4 rounded-xl mb-3 transition-all hover:opacity-80"
+                    style={{ background: "rgba(224,32,32,0.08)", border: "1px solid var(--kruel-red)" }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">👤</span>
+                      <div className="text-left">
+                        <p className="text-sm font-semibold" style={{ color: "var(--kruel-red)" }}>Войти / Создать аккаунт</p>
+                        <p className="text-xs" style={{ color: "var(--kruel-text-dim)" }}>Gmail, ник и пароль</p>
+                      </div>
+                    </div>
+                    <Icon name="ChevronRight" size={16} style={{ color: "var(--kruel-red)" }} />
+                  </button>
+                )}
 
                 {/* Kids mode */}
                 <div
@@ -411,9 +509,7 @@ export default function Index() {
                     <span className="text-xl">🎨</span>
                     <div className="text-left">
                       <p className="text-sm font-medium" style={{ color: "var(--kruel-text)" }}>Тема оформления</p>
-                      <p className="text-xs" style={{ color: "var(--kruel-text-dim)" }}>
-                        {theme === "dark" ? "Тёмная" : "Светлая"}
-                      </p>
+                      <p className="text-xs" style={{ color: "var(--kruel-text-dim)" }}>{theme === "dark" ? "Тёмная" : "Светлая"}</p>
                     </div>
                   </div>
                   <Icon name="ChevronRight" size={16} style={{ color: "var(--kruel-text-dim)" }} />
@@ -436,29 +532,18 @@ export default function Index() {
                 </button>
 
                 <div className="mt-8 text-center">
-                  <p className="font-orbitron text-xs tracking-wider" style={{ color: "var(--kruel-text-dim)" }}>
-                    KRUEL AI v1.0.0
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: "var(--kruel-border)" }}>
-                    © 2025 Kruel Company
-                  </p>
+                  <p className="font-orbitron text-xs tracking-wider" style={{ color: "var(--kruel-text-dim)" }}>KRUEL AI v1.0.0</p>
+                  <p className="text-xs mt-1" style={{ color: "var(--kruel-border)" }}>© 2025 Kruel Company</p>
                 </div>
               </div>
             )}
 
             {settingsSection === "theme" && (
               <div className="px-4 py-6 animate-fade-in">
-                <button
-                  onClick={() => setSettingsSection("main")}
-                  className="flex items-center gap-2 mb-6 text-sm hover:opacity-70 transition-all"
-                  style={{ color: "var(--kruel-red)" }}
-                >
-                  <Icon name="ArrowLeft" size={16} />
-                  Назад
+                <button onClick={() => setSettingsSection("main")} className="flex items-center gap-2 mb-6 text-sm hover:opacity-70 transition-all" style={{ color: "var(--kruel-red)" }}>
+                  <Icon name="ArrowLeft" size={16} /> Назад
                 </button>
-                <h2 className="font-orbitron font-semibold text-base mb-6" style={{ color: "var(--kruel-text)" }}>
-                  Тема оформления
-                </h2>
+                <h2 className="font-orbitron font-semibold text-base mb-6" style={{ color: "var(--kruel-text)" }}>Тема оформления</h2>
                 <div className="space-y-3">
                   {themeOptions.map((opt) => (
                     <button
@@ -475,9 +560,7 @@ export default function Index() {
                         <p className="text-sm font-semibold" style={{ color: "var(--kruel-text)" }}>{opt.label}</p>
                         <p className="text-xs" style={{ color: "var(--kruel-text-dim)" }}>{opt.desc}</p>
                       </div>
-                      {theme === opt.id && (
-                        <Icon name="Check" size={18} style={{ color: "var(--kruel-red)" }} />
-                      )}
+                      {theme === opt.id && <Icon name="Check" size={18} style={{ color: "var(--kruel-red)" }} />}
                     </button>
                   ))}
                 </div>
@@ -486,52 +569,27 @@ export default function Index() {
 
             {settingsSection === "support" && (
               <div className="px-4 py-6 animate-fade-in">
-                <button
-                  onClick={() => setSettingsSection("main")}
-                  className="flex items-center gap-2 mb-6 text-sm hover:opacity-70 transition-all"
-                  style={{ color: "var(--kruel-red)" }}
-                >
-                  <Icon name="ArrowLeft" size={16} />
-                  Назад
+                <button onClick={() => setSettingsSection("main")} className="flex items-center gap-2 mb-6 text-sm hover:opacity-70 transition-all" style={{ color: "var(--kruel-red)" }}>
+                  <Icon name="ArrowLeft" size={16} /> Назад
                 </button>
-                <h2 className="font-orbitron font-semibold text-base mb-6" style={{ color: "var(--kruel-text)" }}>
-                  Техподдержка
-                </h2>
-
-                <div
-                  className="p-5 rounded-2xl mb-4"
-                  style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)" }}
-                >
+                <h2 className="font-orbitron font-semibold text-base mb-6" style={{ color: "var(--kruel-text)" }}>Техподдержка</h2>
+                <div className="p-5 rounded-2xl mb-4" style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)" }}>
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-2xl">📧</span>
                     <p className="font-semibold text-sm" style={{ color: "var(--kruel-text)" }}>Email поддержки</p>
                   </div>
-                  <a
-                    href="mailto:kruelcompany2@gmail.com"
-                    className="text-sm font-medium hover:opacity-80 transition-all"
-                    style={{ color: "var(--kruel-red)" }}
-                  >
+                  <a href="mailto:kruelcompany2@gmail.com" className="text-sm font-medium hover:opacity-80 transition-all" style={{ color: "var(--kruel-red)" }}>
                     kruelcompany2@gmail.com
                   </a>
                 </div>
-
-                <div
-                  className="p-5 rounded-2xl mb-4"
-                  style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)" }}
-                >
+                <div className="p-5 rounded-2xl mb-4" style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)" }}>
                   <p className="text-sm font-medium mb-2" style={{ color: "var(--kruel-text)" }}>Время ответа</p>
                   <p className="text-xs leading-relaxed" style={{ color: "var(--kruel-text-dim)" }}>
-                    Отвечаем в течение 24 часов в рабочие дни. Напиши нам — и мы поможем решить любой вопрос.
+                    Отвечаем в течение 24 часов в рабочие дни.
                   </p>
                 </div>
-
-                <a
-                  href="mailto:kruelcompany2@gmail.com"
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold hover:opacity-90 transition-all"
-                  style={{ background: "var(--kruel-red)", color: "#fff" }}
-                >
-                  <Icon name="Mail" size={16} />
-                  Написать в поддержку
+                <a href="mailto:kruelcompany2@gmail.com" className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-semibold hover:opacity-90 transition-all" style={{ background: "var(--kruel-red)", color: "#fff" }}>
+                  <Icon name="Mail" size={16} /> Написать в поддержку
                 </a>
               </div>
             )}
@@ -539,7 +597,122 @@ export default function Index() {
         )}
       </main>
 
-      {/* Age verification modal */}
+      {/* AUTH MODAL */}
+      {authModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fade-in"
+          style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)" }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl p-6 animate-scale-in"
+            style={{ background: "var(--kruel-surface)", border: "1px solid var(--kruel-border)" }}
+          >
+            {/* Logo */}
+            <div className="flex justify-center mb-4">
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center glow-pulse"
+                style={{ background: "var(--kruel-red)" }}
+              >
+                <span className="font-orbitron text-white font-black text-base">K</span>
+              </div>
+            </div>
+
+            <h3 className="font-orbitron font-bold text-base text-center mb-1" style={{ color: "var(--kruel-text)" }}>
+              {authMode === "register" ? "Создать аккаунт" : "Войти"}
+            </h3>
+            <p className="text-xs text-center mb-5" style={{ color: "var(--kruel-text-dim)" }}>
+              {authMode === "register" ? "Укажи данные для регистрации" : "Введи свои данные для входа"}
+            </p>
+
+            {/* Toggle */}
+            <div
+              className="flex rounded-xl p-1 mb-5"
+              style={{ background: "var(--kruel-surface2)" }}
+            >
+              {(["register", "login"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => { setAuthMode(m); setAuthError(""); }}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all"
+                  style={{
+                    background: authMode === m ? "var(--kruel-red)" : "transparent",
+                    color: authMode === m ? "#fff" : "var(--kruel-text-dim)",
+                  }}
+                >
+                  {m === "register" ? "Регистрация" : "Войти"}
+                </button>
+              ))}
+            </div>
+
+            {/* Fields */}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "var(--kruel-text-dim)" }}>Gmail</label>
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => { setAuthEmail(e.target.value); setAuthError(""); }}
+                  placeholder="example@gmail.com"
+                  className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                  style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)", color: "var(--kruel-text)" }}
+                />
+              </div>
+
+              {authMode === "register" && (
+                <div>
+                  <label className="text-xs mb-1 block" style={{ color: "var(--kruel-text-dim)" }}>Ник (будет виден другим)</label>
+                  <input
+                    type="text"
+                    value={authNick}
+                    onChange={(e) => { setAuthNick(e.target.value); setAuthError(""); }}
+                    placeholder="Придумай ник..."
+                    className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                    style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)", color: "var(--kruel-text)" }}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "var(--kruel-text-dim)" }}>Пароль</label>
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(e) => { setAuthPassword(e.target.value); setAuthError(""); }}
+                  placeholder={authMode === "register" ? "Минимум 6 символов" : "Введи пароль"}
+                  className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                  onKeyDown={(e) => e.key === "Enter" && handleAuthSubmit()}
+                  style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)", color: "var(--kruel-text)" }}
+                />
+              </div>
+            </div>
+
+            {authError && (
+              <p className="text-xs mt-3 text-center animate-fade-in" style={{ color: "var(--kruel-red)" }}>
+                {authError}
+              </p>
+            )}
+
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setAuthModal(false)}
+                className="flex-1 py-3 rounded-xl text-sm font-medium transition-all hover:opacity-80"
+                style={{ background: "var(--kruel-surface2)", color: "var(--kruel-text-dim)", border: "1px solid var(--kruel-border)" }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleAuthSubmit}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+                style={{ background: "var(--kruel-red)", color: "#fff" }}
+              >
+                {authMode === "register" ? "Создать" : "Войти"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AGE MODAL */}
       {ageModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fade-in"
@@ -549,7 +722,6 @@ export default function Index() {
             className="w-full max-w-sm rounded-2xl p-6 animate-scale-in"
             style={{ background: "var(--kruel-surface)", border: "1px solid var(--kruel-border)" }}
           >
-            {/* Icon */}
             <div className="flex justify-center mb-4">
               <div
                 className="w-14 h-14 rounded-2xl flex items-center justify-center"
@@ -558,24 +730,16 @@ export default function Index() {
                 <span className="text-2xl">🔞</span>
               </div>
             </div>
-
             <h3 className="font-orbitron font-bold text-base text-center mb-1" style={{ color: "var(--kruel-text)" }}>
               Проверка возраста
             </h3>
             <p className="text-xs text-center mb-5" style={{ color: "var(--kruel-text-dim)" }}>
-              Детский режим защищает от взрослого контента. Чтобы отключить его — ответь на вопрос.
+              Чтобы отключить детский режим — ответь на вопрос.
             </p>
-
-            <div
-              className="p-4 rounded-xl mb-4"
-              style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)" }}
-            >
-              <p className="text-sm font-medium mb-1" style={{ color: "var(--kruel-text)" }}>
-                {QUIZ.question}
-              </p>
+            <div className="p-4 rounded-xl mb-4" style={{ background: "var(--kruel-surface2)", border: "1px solid var(--kruel-border)" }}>
+              <p className="text-sm font-medium mb-1" style={{ color: "var(--kruel-text)" }}>{QUIZ.question}</p>
               <p className="text-xs" style={{ color: "var(--kruel-text-dim)" }}>{QUIZ.hint}</p>
             </div>
-
             <input
               type="number"
               value={ageAnswer}
@@ -583,19 +747,13 @@ export default function Index() {
               onKeyDown={(e) => e.key === "Enter" && handleAgeSubmit()}
               placeholder="Введи ответ..."
               className="w-full px-4 py-3 rounded-xl text-sm outline-none mb-2"
-              style={{
-                background: "var(--kruel-surface2)",
-                border: ageError ? "1px solid var(--kruel-red)" : "1px solid var(--kruel-border)",
-                color: "var(--kruel-text)",
-              }}
+              style={{ background: "var(--kruel-surface2)", border: ageError ? "1px solid var(--kruel-red)" : "1px solid var(--kruel-border)", color: "var(--kruel-text)" }}
             />
-
             {ageError && (
               <p className="text-xs mb-3 text-center animate-fade-in" style={{ color: "var(--kruel-red)" }}>
                 Неверный ответ. Попробуй ещё раз!
               </p>
             )}
-
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => setAgeModal(false)}
