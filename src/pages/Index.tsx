@@ -9,7 +9,12 @@ interface Message {
   role: "user" | "ai";
   text: string;
   time: string;
+  type?: "text" | "image";
+  imageUrl?: string;
 }
+
+const CHAT_URL = "https://functions.poehali.dev/2508c734-bfd5-4059-9374-6cf55b5714d0";
+const IMAGE_URL = "https://functions.poehali.dev/07f2d990-e417-4d91-b3b0-474506ee87a4";
 
 interface User {
   email: string;
@@ -133,27 +138,73 @@ export default function Index() {
     setAuthModal(false);
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!input.trim()) return;
-    const userMsg: Message = {
-      id: Date.now(),
-      role: "user",
-      text: input.trim(),
-      time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
-    };
+    const text = input.trim();
+    const now = () => new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+    const userMsg: Message = { id: Date.now(), role: "user", text, time: now() };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsTyping(true);
-    setTimeout(() => {
-      const reply: Message = {
-        id: Date.now() + 1,
-        role: "ai",
-        text: DEMO_REPLIES[Math.floor(Math.random() * DEMO_REPLIES.length)],
-        time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
-      };
-      setMessages((prev) => [...prev, reply]);
+
+    try {
+      // Команда /ci — генерация изображения
+      const ciMatch = text.match(/^\/ci\s+(.+)/i);
+      if (ciMatch) {
+        const prompt = ciMatch[1].trim();
+        const res = await fetch(IMAGE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt }),
+        });
+        const data = await res.json();
+        const parsed = typeof data === "string" ? JSON.parse(data) : data;
+
+        if (parsed.url) {
+          setMessages((prev) => [...prev, {
+            id: Date.now() + 1, role: "ai",
+            text: `Изображение по запросу: «${prompt}»`,
+            time: now(), type: "image", imageUrl: parsed.url,
+          }]);
+        } else {
+          setMessages((prev) => [...prev, {
+            id: Date.now() + 1, role: "ai",
+            text: "Не удалось сгенерировать изображение. Попробуй ещё раз.",
+            time: now(),
+          }]);
+        }
+        return;
+      }
+
+      // Обычное сообщение — отправляем в чат-бот
+      const history = [...messages, userMsg]
+        .filter((m) => m.type !== "image")
+        .slice(-10)
+        .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+
+      const res = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history, kidsMode }),
+      });
+      const data = await res.json();
+      const parsed = typeof data === "string" ? JSON.parse(data) : data;
+
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1, role: "ai",
+        text: parsed.reply || "Что-то пошло не так, попробуй ещё раз.",
+        time: now(),
+      }]);
+    } catch {
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1, role: "ai",
+        text: "Ошибка соединения. Проверь интернет и попробуй снова.",
+        time: now(),
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 1400);
+    }
   };
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
@@ -292,14 +343,27 @@ export default function Index() {
                   )}
                   <div style={{ maxWidth: "72%" }}>
                     <div
-                      className="px-4 py-3 text-sm leading-relaxed"
+                      className="text-sm leading-relaxed overflow-hidden"
                       style={
                         msg.role === "user"
-                          ? { background: "var(--kruel-red)", color: "#fff", borderRadius: "18px 18px 4px 18px" }
-                          : { background: "var(--kruel-surface2)", color: "var(--kruel-text)", border: "1px solid var(--kruel-border)", borderRadius: "18px 18px 18px 4px" }
+                          ? { background: "var(--kruel-red)", color: "#fff", borderRadius: "18px 18px 4px 18px", padding: "12px 16px" }
+                          : { background: "var(--kruel-surface2)", color: "var(--kruel-text)", border: "1px solid var(--kruel-border)", borderRadius: "18px 18px 18px 4px", padding: msg.type === "image" ? "8px" : "12px 16px" }
                       }
                     >
-                      {msg.text}
+                      {msg.type === "image" && msg.imageUrl ? (
+                        <div>
+                          <img
+                            src={msg.imageUrl}
+                            alt={msg.text}
+                            className="rounded-xl w-full block"
+                            style={{ maxWidth: "260px", cursor: "pointer" }}
+                            onClick={() => window.open(msg.imageUrl, "_blank")}
+                          />
+                          <p className="text-xs mt-2 px-1" style={{ color: "var(--kruel-text-dim)" }}>{msg.text}</p>
+                        </div>
+                      ) : (
+                        msg.text
+                      )}
                     </div>
                     <div
                       className="text-xs mt-1 px-1"
@@ -351,7 +415,7 @@ export default function Index() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
                   }}
-                  placeholder={kidsMode ? "Спроси меня что-нибудь! 😊" : "Напиши сообщение..."}
+                  placeholder={kidsMode ? "Спроси меня что-нибудь! 😊" : "Напиши сообщение... или /ci кот в космосе"}
                   className="flex-1 resize-none bg-transparent outline-none text-sm leading-relaxed"
                   style={{ color: "var(--kruel-text)", minHeight: "24px", maxHeight: "120px" }}
                 />
