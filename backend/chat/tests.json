@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "name": "Chat response",
+      "method": "POST",
+      "path": "/",
+      "body": "{\"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}], \"kidsMode\": false}",
+      "expectedStatus": 200,
+      "expectedBody": {"reply": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
