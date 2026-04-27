@@ -136,15 +136,15 @@ export default function Index() {
               setActiveTab(tab.id);
               if (tab.id === "settings") setSettingsSection("main");
             }}
-            className="flex items-center gap-2 px-5 py-3 text-sm font-medium transition-all relative"
+            title={tab.label}
+            className="flex items-center justify-center px-6 py-3.5 transition-all relative"
             style={{
               color: activeTab === tab.id ? "var(--kruel-red)" : "var(--kruel-text-dim)",
               borderBottom: activeTab === tab.id ? "2px solid var(--kruel-red)" : "2px solid transparent",
               background: "transparent",
             }}
           >
-            <Icon name={tab.icon} size={15} />
-            {tab.label}
+            <Icon name={tab.icon} size={20} />
           </button>
         ))}
       </nav>
